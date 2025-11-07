@@ -15,5 +15,4 @@ class TTSRequest(BaseModel):
     text: str
     language_id: str = "ru"
     audio_prompt: Optional[str] = "pudge"
-    chunk_size: int = 1024
 

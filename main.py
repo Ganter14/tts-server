@@ -51,7 +51,6 @@ async def generate_speech(request: TTSRequest, clients=Depends(get_ws_clients)):
             language_id=request.language_id,
             audio_prompt=request.audio_prompt,
             target_clients=clients,
-            chunk_size=request.chunk_size
         )
 
         return {

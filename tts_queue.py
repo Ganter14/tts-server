@@ -2,7 +2,7 @@ import asyncio
 from typing import Optional, List
 from chatterbox.mtl_tts import ChatterboxMultilingualTTS
 from fastapi import WebSocket
-from audio_utils import convert_audio_to_mp4_opus
+from audio_utils import convert_audio_to_chunks
 
 
 class TTSRequestQueue:
@@ -12,7 +12,7 @@ class TTSRequestQueue:
         self.request_lock = asyncio.Lock()
         self.model = model
 
-    async def add_request(self, request_id: str, text: str, language_id: str, audio_prompt: Optional[str], target_clients: List[WebSocket], chunk_size: int):
+    async def add_request(self, request_id: str, text: str, language_id: str, audio_prompt: Optional[str], target_clients: List[WebSocket]):
         """Добавляет запрос в очередь обработки"""
         await self.queue.put({
             'request_id': request_id,
@@ -20,7 +20,6 @@ class TTSRequestQueue:
             'language_id': language_id,
             'audio_prompt': audio_prompt,
             'target_clients': target_clients,
-            'chunk_size': chunk_size
         })
 
         # Запускаем обработчик очереди если он еще не работает
@@ -61,7 +60,6 @@ class TTSRequestQueue:
         language_id = request_data['language_id']
         audio_prompt = request_data['audio_prompt']
         target_clients = request_data['target_clients']
-        chunk_size = request_data['chunk_size']
         try:
             if self.model is None:
                 print(f"Модель не загружена для запроса {request_id}")
@@ -79,23 +77,15 @@ class TTSRequestQueue:
             sr = self.model.sr
             chunk_count = 0
 
-            # for i in range(0, len(audio_np), chunk_size):
-            #     chunk = audio_np[i:i + chunk_size]
-            #     # Конвертируем чанк в MP4/Opus формат
-            #     mp4_data = await convert_audio_to_mp4_opus(chunk)
+            # Кодируем всё аудио целиком и разбиваем на чанки по границам фрагментов
+            # Это гарантирует корректное воспроизведение через MSE
+            audio_chunks = await convert_audio_to_chunks(audio_np, format='webm_opus')
 
-            #     if target_clients:
-            #         await self._send_bytes_to_clients(target_clients, mp4_data)
-            #     chunk_count += 1
-
-
-            mp4_data = await convert_audio_to_mp4_opus(audio_np)
-            if target_clients:
-                await asyncio.gather(
-                    *[ws.send_bytes(mp4_data) for ws in target_clients],
-                    return_exceptions=True
-                )
-            chunk_count += 1
+            # Отправляем чанки последовательно
+            for chunk in audio_chunks:
+                if target_clients:
+                    await self._send_bytes_to_clients(target_clients, chunk)
+                chunk_count += 1
 
             print(f"Запрос {request_id} обработан, отправлено {chunk_count} чанков")
 
