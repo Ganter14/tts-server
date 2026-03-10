@@ -81,7 +81,7 @@ class TTSRequestQueue:
 
             current_date = datetime.datetime.now().strftime("%Y-%m-%d")
             current_time = datetime.datetime.now().strftime("%H-%M-%S")
-            audio_dir = f"generated_audio/{current_date}"
+            audio_dir = f"generated_audio/{current_date}/model"
             if os.getenv("is_save_audio") == "True":
                 os.makedirs(audio_dir, exist_ok=True)
                 torchaudio.save(f"{audio_dir}/{current_time}.wav", wav, self.model.sr)
