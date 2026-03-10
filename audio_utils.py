@@ -1,85 +1,41 @@
 import asyncio
-from datetime import datetime
+import datetime
+import os
 from typing import Literal, List
 import numpy as np
-import struct
+import ffmpeg
 
-mp4_opus_args = [
-        'ffmpeg',
-        '-f', 'f32le',  # Формат входных данных: 32-bit float little-endian
-        '-ar', '24000',  # Входной sample rate (из параметра функции)
-        '-ac', '1',  # Моно канал
-        '-i', 'pipe:0',  # Читать из stdin
-        '-ar', '48000',  # Выходной sample rate (ресемплинг до 48000)
-        '-c:a', 'libopus',  # Кодек Opus
-        '-b:a', '64k',  # Битрейт для речи
-        '-frame_duration', '20',  # Frame duration in milliseconds
-        '-application', 'voip',  # Application type
-        '-packet_loss', '0',  # Packet loss percentage
-        '-movflags', 'frag_keyframe+empty_moov+default_base_moof',  # Fragmented MP4 для MSE (без base-data-offset)
-        '-f', 'mp4',  # Формат выхода
-        'pipe:1'  # Писать в stdout
-]
-
-webm_opus_args = [
-        'ffmpeg',
-        '-f', 'f32le',  # Формат входных данных: 32-bit float little-endian
-        '-ar', '24000',  # Входной sample rate (из параметра функции)
-        '-ac', '1',  # Моно канал
-        '-i', 'pipe:0',  # Читать из stdin
-        '-ar', '48000',  # Выходной sample rate (ресемплинг до 48000)
-        '-c:a', 'libopus',  # Кодек Opus
-        '-b:a', '64k',  # Битрейт для речи
-        '-frame_duration', '20',  # Frame duration in milliseconds
-        '-application', 'voip',  # Application type
-        '-packet_loss', '0',  # Packet loss percentage
-        '-f', 'webm',  # Формат выхода (WebM лучше для streaming)
-        '-cluster_time_limit', '1000',  # Лимит времени кластера в миллисекундах (1 секунда)
-        '-cluster_size_limit', '32768',  # Лимит размера кластера в байтах (32KB)
-        'pipe:1'  # Писать в stdout
-]
-
-mp3_args = [
-    'ffmpeg',
-    '-f', 'f32le',
-    '-ar', '24000',
-    '-ac', '1',
-    '-i', 'pipe:0',
-    '-ar', '48000',
-    '-c:a', 'libmp3lame',
-    '-b:a', '128k',
-    '-f', 'mp3',
-    'pipe:1'
-]
-
-ffmpeg_args_dict = {
-    'mp4_opus': mp4_opus_args,
-    'webm_opus': webm_opus_args,
-    'mp3': mp3_args,
-}
-
-async def convert_audio_to_mp4_opus(audio_np: np.ndarray, format: Literal['mp4_opus', 'webm_opus', 'mp3'] = 'webm_opus') -> bytes:
-    """Конвертирует numpy массив аудио в MP4/Opus формат используя ffmpeg"""
-    # Убеждаемся что аудио в формате float32
-    if audio_np.dtype != np.float32:
-        audio_np = audio_np.astype(np.float32)
-
-    # Параметры ffmpeg для конвертации в fragmented MP4 с Opus
-    ffmpeg_args = ffmpeg_args_dict[format]
-
+async def convert_audio_to_opus(audio_np: np.ndarray) -> bytes:
+    process = None
     try:
-        # Создаем асинхронный subprocess
-        process = await asyncio.create_subprocess_exec(
-            *ffmpeg_args,
-            stdin=asyncio.subprocess.PIPE,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
+        process = (
+            ffmpeg
+            .input(
+                'pipe:',
+                format='f32le',
+                ar=24000,
+                ac=1
+            )
+            .output(
+                'pipe:1',
+                format='mp4',
+                ar=48000,
+                ac=1,
+                acodec='libopus',
+                audio_bitrate='64k',
+                frame_duration=20,
+                application='voip',
+                packet_loss=0,
+                movflags='frag_keyframe+empty_moov+default_base_moof',
+                cluster_time_limit='1000',
+                cluster_size_limit='32768'
+            )
+            .run_async(pipe_stdout=True, pipe_stderr=True, pipe_stdin=True)
         )
+        print(f"process: {process}")
+        audio_bytes = audio_np.tobytes()
+        stdout, stderr = await asyncio.to_thread(process.communicate, input=audio_bytes)
 
-        # Отправляем аудио данные в stdin и получаем результат из stdout
-        stdout, stderr = await process.communicate(input=audio_np.tobytes())
-
-        # Проверяем код возврата
         if process.returncode != 0:
             error_msg = stderr.decode('utf-8', errors='ignore') if stderr else "Unknown error"
             raise RuntimeError(f"ffmpeg конвертация не удалась (код {process.returncode}): {error_msg}")
@@ -89,100 +45,9 @@ async def convert_audio_to_mp4_opus(audio_np: np.ndarray, format: Literal['mp4_o
         raise RuntimeError("ffmpeg не найден. Убедитесь что ffmpeg установлен и доступен в PATH")
     except Exception as e:
         raise RuntimeError(f"Ошибка при конвертации аудио в MP4/Opus: {e}")
-
-
-def split_mp4_into_chunks(encoded_data: bytes, max_chunk_size: int = 65536) -> List[bytes]:
-    """
-    Разбивает фрагментированный MP4 на чанки по границам moof боксов.
-    Первый чанк содержит moov + первый moof, остальные - последующие moof/mdat пары.
-    """
-    chunks = []
-    data = bytearray(encoded_data)
-    pos = 0
-    first_moof_pos = None
-
-    # Ищем первый moof бокс
-    while pos < len(data) - 8:
-        # Читаем размер бокса (4 байта, big-endian)
-        if pos + 8 > len(data):
-            break
-        box_size = struct.unpack('>I', data[pos:pos+4])[0]
-        box_type = data[pos+4:pos+8]
-
-        if box_type == b'moof':
-            first_moof_pos = pos
-            break
-
-        if box_size == 0 or box_size > len(data) - pos:
-            pos += 1
-            continue
-
-        pos += box_size
-
-    if first_moof_pos is None:
-        # Если moof не найден, возвращаем весь файл как один чанк
-        return [encoded_data]
-
-    # Первый чанк: всё до первого moof включительно
-    # Находим конец первого moof (ищем следующий moof или конец файла)
-    pos = first_moof_pos
-    first_chunk_end = first_moof_pos
-
-    while pos < len(data) - 8:
-        box_size = struct.unpack('>I', data[pos:pos+4])[0]
-        box_type = data[pos+4:pos+8]
-
-        if box_size == 0 or box_size > len(data) - pos:
-            break
-
-        first_chunk_end = pos + box_size
-
-        # Если нашли следующий moof, останавливаемся
-        if box_type == b'moof' and pos > first_moof_pos:
-            break
-
-        pos += box_size
-
-    # Первый чанк: moov + первый moof
-    first_chunk = bytes(data[:first_chunk_end])
-    chunks.append(first_chunk)
-
-    # Остальные чанки: последующие moof/mdat пары
-    pos = first_chunk_end
-    while pos < len(data) - 8:
-        chunk_start = pos
-
-        # Находим следующий moof
-        while pos < len(data) - 8:
-            box_size = struct.unpack('>I', data[pos:pos+4])[0]
-            box_type = data[pos+4:pos+8]
-
-            if box_size == 0 or box_size > len(data) - pos:
-                # Дошли до конца, добавляем остаток
-                if pos < len(data):
-                    chunks.append(bytes(data[chunk_start:]))
-                break
-
-            pos += box_size
-
-            # Если нашли moof, начинаем новый чанк
-            if box_type == b'moof':
-                # Завершаем предыдущий чанк
-                if chunk_start < pos - box_size:
-                    chunks.append(bytes(data[chunk_start:pos - box_size]))
-                chunk_start = pos - box_size
-            elif pos >= len(data):
-                # Конец файла
-                if chunk_start < len(data):
-                    chunks.append(bytes(data[chunk_start:]))
-                break
-        else:
-            # Добавляем последний чанк
-            if chunk_start < len(data):
-                chunks.append(bytes(data[chunk_start:]))
-            break
-
-    return chunks if chunks else [encoded_data]
+    finally:
+        if process:
+            process.terminate()
 
 
 def split_webm_into_chunks(encoded_data: bytes, max_chunk_size: int = 65536) -> List[bytes]:
@@ -275,19 +140,17 @@ async def convert_audio_to_chunks(
     Конвертирует numpy массив аудио в формат и разбивает на чанки по границам фрагментов.
     Возвращает список чанков, готовых для последовательной отправки через MSE.
     """
-    # Кодируем всё аудио целиком
-    encoded_data = await convert_audio_to_mp4_opus(audio_np, format)
+    encoded_data = await convert_audio_to_opus(audio_np)
 
-    # Разбиваем на чанки по границам фрагментов
-    if format == 'mp4_opus':
-        chunks = split_mp4_into_chunks(encoded_data, max_chunk_size)
-    elif format == 'webm_opus':
-        chunks = split_webm_into_chunks(encoded_data, max_chunk_size)
-    else:
-        # Для MP3 просто разбиваем по размеру
-        chunks = []
-        for i in range(0, len(encoded_data), max_chunk_size):
-            chunks.append(encoded_data[i:i + max_chunk_size])
+    if os.getenv("is_save_audio") == "True":
+        current_date = datetime.datetime.now().strftime("%Y-%m-%d")
+        current_time = datetime.datetime.now().strftime("%H-%M-%S")
+        audio_dir = f"generated_audio/{current_date}/ffmpeg"
+        os.makedirs(audio_dir, exist_ok=True)
+        with open(f"{audio_dir}/{current_time}.webm", "wb") as f:
+            f.write(encoded_data)
+
+    chunks = split_webm_into_chunks(encoded_data, max_chunk_size)
 
     print(f"Аудио закодировано: {len(encoded_data)} байт, разбито на {len(chunks)} чанков")
     if chunks:
