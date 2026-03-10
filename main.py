@@ -9,6 +9,9 @@ from models import TTSRequest
 from connections import get_ws_clients
 from tts_queue import TTSRequestQueue
 from model_loader import load_model_with_fallback
+from dotenv import load_dotenv
+
+load_dotenv()
 
 model = None
 request_queue = None

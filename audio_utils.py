@@ -83,12 +83,6 @@ async def convert_audio_to_mp4_opus(audio_np: np.ndarray, format: Literal['mp4_o
         if process.returncode != 0:
             error_msg = stderr.decode('utf-8', errors='ignore') if stderr else "Unknown error"
             raise RuntimeError(f"ffmpeg конвертация не удалась (код {process.returncode}): {error_msg}")
-
-        # save to file
-        now_str = datetime.now().strftime("%Y%m%d_%H:%M:%S")
-        extension = 'webm' if format == 'webm_opus' else 'mp4' if format == 'mp4_opus' else 'mp3'
-        with open(f"generated_audio/{now_str}.{extension}", "wb") as f:
-            f.write(stdout)
         return stdout
 
     except FileNotFoundError:

@@ -1,7 +1,10 @@
 import asyncio
+import datetime
+import os
 from typing import Optional, List
 from chatterbox.mtl_tts import ChatterboxMultilingualTTS
 from fastapi import WebSocket
+import torchaudio
 from audio_utils import convert_audio_to_chunks
 
 
@@ -66,16 +69,23 @@ class TTSRequestQueue:
                 return
 
             prompt_path = f"audio_prompts/{audio_prompt}.wav" if audio_prompt else "audio_prompts/erika.wav"
+
+            start_time = datetime.datetime.now()
             wav = self.model.generate(
                 text=text,
                 language_id=language_id,
                 audio_prompt_path=prompt_path,
             )
-            audio_np = wav.squeeze().cpu().numpy()
+            end_time = datetime.datetime.now()
+            print(f"Time taken to generate audio: {end_time - start_time}")
 
-            print(f"model.sr: {self.model.sr}")
-            sr = self.model.sr
-            chunk_count = 0
+            current_date = datetime.datetime.now().strftime("%Y-%m-%d")
+            current_time = datetime.datetime.now().strftime("%H-%M-%S")
+            audio_dir = f"generated_audio/{current_date}"
+            if os.getenv("is_save_audio") == "True":
+                os.makedirs(audio_dir, exist_ok=True)
+                torchaudio.save(f"{audio_dir}/{current_time}.wav", wav, self.model.sr)
+            audio_np = wav.squeeze().cpu().numpy()
 
             # Кодируем всё аудио целиком и разбиваем на чанки по границам фрагментов
             # Это гарантирует корректное воспроизведение через MSE
@@ -85,9 +95,7 @@ class TTSRequestQueue:
             for chunk in audio_chunks:
                 if target_clients:
                     await self._send_bytes_to_clients(target_clients, chunk)
-                chunk_count += 1
-
-            print(f"Запрос {request_id} обработан, отправлено {chunk_count} чанков")
+            print(f"Запрос {request_id} обработан, отправлено {len(audio_chunks)} чанков")
 
         except Exception as e:
             print(f"Ошибка при обработке запроса {request_id}: {e}")
