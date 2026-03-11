@@ -32,7 +32,6 @@ async def convert_audio_to_opus(audio_np: np.ndarray) -> bytes:
             )
             .run_async(pipe_stdout=True, pipe_stderr=True, pipe_stdin=True)
         )
-        print(f"process: {process}")
         audio_bytes = audio_np.tobytes()
         stdout, stderr = await asyncio.to_thread(process.communicate, input=audio_bytes)
 

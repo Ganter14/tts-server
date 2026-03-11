@@ -5,7 +5,7 @@ from typing import Optional, List
 from chatterbox.mtl_tts import ChatterboxMultilingualTTS
 from fastapi import WebSocket
 import torchaudio
-from audio_utils import convert_audio_to_chunks
+from app.services.audio import convert_audio_to_chunks
 
 
 class TTSRequestQueue:
@@ -77,7 +77,7 @@ class TTSRequestQueue:
                 audio_prompt_path=prompt_path,
             )
             end_time = datetime.datetime.now()
-            print(f"Time taken to generate audio: {end_time - start_time}")
+            print(f"Затрачено времени на генерацию аудио: {end_time - start_time}")
 
             current_date = datetime.datetime.now().strftime("%Y-%m-%d")
             current_time = datetime.datetime.now().strftime("%H-%M-%S")
