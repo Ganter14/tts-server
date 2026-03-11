@@ -1,11 +1,12 @@
 import asyncio
 import datetime
 import os
-from typing import Literal, List
+from typing import List
 import numpy as np
 import ffmpeg
 
 async def convert_audio_to_opus(audio_np: np.ndarray) -> bytes:
+    """Конвертирует numpy массив аудио в формат Opus"""
     process = None
     try:
         process = (
@@ -132,7 +133,6 @@ def split_webm_into_chunks(encoded_data: bytes, max_chunk_size: int = 65536) -> 
 
 async def convert_audio_to_chunks(
     audio_np: np.ndarray,
-    format: Literal['mp4_opus', 'webm_opus', 'mp3'] = 'webm_opus',
     max_chunk_size: int = 65536
 ) -> List[bytes]:
     """

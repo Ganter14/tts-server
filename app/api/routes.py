@@ -1,4 +1,3 @@
-# app/api/routes.py
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect, status
@@ -10,12 +9,10 @@ router = APIRouter()
 
 
 def get_request_queue(request: Request):
-    """Получает очередь запросов из app.state (устанавливается в lifespan)"""
     return request.app.state.request_queue
 
 
 def get_model(request: Request):
-    """Получает модель TTS из app.state"""
     return request.app.state.model
 
 

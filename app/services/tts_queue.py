@@ -89,7 +89,7 @@ class TTSRequestQueue:
 
             # Кодируем всё аудио целиком и разбиваем на чанки по границам фрагментов
             # Это гарантирует корректное воспроизведение через MSE
-            audio_chunks = await convert_audio_to_chunks(audio_np, format='webm_opus')
+            audio_chunks = await convert_audio_to_chunks(audio_np)
 
             # Отправляем чанки последовательно
             for chunk in audio_chunks:
