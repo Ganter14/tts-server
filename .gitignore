@@ -218,3 +218,4 @@ __marimo__/
 # generated audio
 generated_audio/
 *.env
+/local_models
