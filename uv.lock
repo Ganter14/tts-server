@@ -220,8 +220,8 @@ wheels = [
 
 [[package]]
 name = "faster-qwen3-tts"
-version = "0.2.4"
-source = { registry = "https://pypi.org/simple" }
+version = "0.2.5"
+source = { git = "https://github.com/andimarafioti/faster-qwen3-tts.git?rev=186a24542493dab7ef28c946137918e02d827a5e#186a24542493dab7ef28c946137918e02d827a5e" }
 dependencies = [
     { name = "huggingface-hub" },
     { name = "numpy" },
@@ -229,9 +229,6 @@ dependencies = [
     { name = "soundfile" },
     { name = "torch" },
     { name = "transformers" },
-]
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/53/3b/7bfd1959a182dc29782ff05d12eb0b587b119b6ea0db07524ab97b6cdbd7/faster_qwen3_tts-0.2.4-py3-none-any.whl", hash = "sha256:aede5398034dc063feec82fd54e5289f2d8fb308a6667e388b1dafeb87f6d9a0", size = 31518, upload-time = "2026-03-04T23:48:55.82Z" },
 ]
 
 [[package]]
@@ -1489,7 +1486,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "fastapi", specifier = ">=0.135.1" },
-    { name = "faster-qwen3-tts", specifier = ">=0.2.4" },
+    { name = "faster-qwen3-tts", git = "https://github.com/andimarafioti/faster-qwen3-tts.git?rev=186a24542493dab7ef28c946137918e02d827a5e" },
     { name = "ffmpeg-python", specifier = ">=0.2.0" },
     { name = "flash-attn", url = "https://github.com/mjun0812/flash-attention-prebuild-wheels/releases/download/v0.7.16/flash_attn-2.8.3%2Bcu128torch2.10-cp312-cp312-linux_x86_64.whl" },
     { name = "modelscope", specifier = ">=1.35.0" },

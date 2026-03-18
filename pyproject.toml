@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "fastapi>=0.135.1",
-    "faster-qwen3-tts>=0.2.4",
+    "faster-qwen3-tts",
     "ffmpeg-python>=0.2.0",
     "flash-attn",
     "modelscope>=1.35.0",
@@ -16,4 +16,5 @@ dependencies = [
 ]
 
 [tool.uv.sources]
+faster-qwen3-tts = { git = "https://github.com/andimarafioti/faster-qwen3-tts.git", rev = "186a24542493dab7ef28c946137918e02d827a5e" }
 flash-attn = { url = "https://github.com/mjun0812/flash-attention-prebuild-wheels/releases/download/v0.7.16/flash_attn-2.8.3%2Bcu128torch2.10-cp312-cp312-linux_x86_64.whl" }
