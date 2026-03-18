@@ -219,3 +219,5 @@ __marimo__/
 generated_audio/
 *.env
 /local_models
+audio_prompts/*
+!audio_prompts/.gitkeep
