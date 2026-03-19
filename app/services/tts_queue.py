@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import io
+import logging
 from typing import Literal, cast
 from fastapi import HTTPException
 import httpx
@@ -11,6 +12,7 @@ from app.core.models import TTSRequest, TTSRequestQueueItem, VTSPogRequest, WSMe
 from app.core.ws_connection_manager import WsConnectionManager
 from app.core.qwen_tts import QwenTTS
 
+logger = logging.getLogger(__name__)
 
 class TTSRequestQueue:
     def __init__(self, model: QwenTTS, ws_connection_manager: WsConnectionManager):
@@ -35,7 +37,7 @@ class TTSRequestQueue:
             client_id=request.client_id,
             chatter_name=request.chatter_name,
         ))
-
+        logger.info(f"Запрос добавлен в очередь: {request_id}")
         # Запускаем обработчик очереди если он еще не работает
         if not self.processing:
             self._processor_task = asyncio.create_task(self._process_queue())
@@ -66,10 +68,12 @@ class TTSRequestQueue:
             elif self.tts_mode == "file":
                 await self._generate_audio_file(request_data)
             else:
+                logger.error(f"Неизвестный режим TTS: {self.tts_mode}")
                 raise HTTPException(status_code=500, detail=f"Неизвестный режим TTS: {self.tts_mode}")
 
 
         except Exception as e:
+            logger.error(f"Ошибка при обработке запроса {request_data.request_id}: {e}")
             raise HTTPException(status_code=500, detail=f"Ошибка при обработке запроса {request_data.request_id}: {e}")
 
 
@@ -96,6 +100,7 @@ class TTSRequestQueue:
                 )
             await self.ws_connection_manager.send_json_to_client(client_id=request_data.client_id, data=WSMessageEnd(request_id=request_data.request_id).model_dump(mode="json"))
         except Exception as e:
+            logger.error(f"Ошибка при генерации аудио потока для запроса {request_data.request_id}: {e}")
             raise HTTPException(status_code=500, detail=f"Ошибка при генерации аудио для запроса {request_data.request_id}: {e}")
 
     async def _generate_audio_file(self, request_data: TTSRequestQueueItem):
@@ -110,11 +115,14 @@ class TTSRequestQueue:
             if not vts_pog_url:
                 raise HTTPException(status_code=500, detail="vts_pog_url is required for file mode")
             async with httpx.AsyncClient() as client:
-                response = await client.post(f"{vts_pog_url}/pog64", json=VTSPogRequest(user=request_data.chatter_name, data=base64_data).model_dump(mode="json"))
-                if response.status_code != 200:
+                payload = VTSPogRequest(user=request_data.chatter_name, data=base64_data).model_dump(mode="json")
+                response = await client.post(f"{vts_pog_url}pog64", json=payload, timeout=10, headers={"Content-Type": "application/json"})
+                if response.status_code != 200 or response.text.strip() != "1":
+                    logger.error(f"Ошибка при генерации аудио для запроса {request_data.request_id}: {response.status_code}")
                     raise HTTPException(status_code=500, detail=f"Ошибка при генерации аудио для запроса {request_data.request_id}: {response.status_code}")
 
         except Exception as e:
+            logger.error(f"Ошибка при генерации аудио для запроса {request_data.request_id}: {e}")
             raise HTTPException(status_code=500, detail=f"Ошибка при генерации аудио для запроса {request_data.request_id}: {e}")
 
     async def shutdown(self, timeout: float = 30.0) -> None:
