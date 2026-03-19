@@ -1,14 +1,20 @@
+import asyncio
 import os
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request
-from dotenv import load_dotenv
+
 import uvicorn
-from app.services.tts_queue import TTSRequestQueue
+from dotenv import load_dotenv
+from fastapi import FastAPI
+
+from app.api.routes import router
+from app.core.models import TTSRequestQueueItem
 from app.core.qwen_tts import QwenTTS
 from app.core.ws_connection_manager import WsConnectionManager
-from app.api.routes import router
+from app.services.pipeline.pipeline import TTSPipeline
+from app.services.tts_queue import TTSRequestQueue
 
 load_dotenv()
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -16,7 +22,19 @@ async def lifespan(app: FastAPI):
     # Startup
     app.state.model = QwenTTS()
     app.state.ws_connection_manager = WsConnectionManager()
-    app.state.request_queue = TTSRequestQueue(app.state.model, app.state.ws_connection_manager)
+    request_queue: asyncio.Queue[TTSRequestQueueItem] = asyncio.Queue()
+    vts_pog_url = os.getenv("vts_pog_url")
+    tts_mode = os.getenv("tts_mode", "streaming")
+    if tts_mode not in ("streaming", "file"):
+        tts_mode = "streaming"
+    pipeline = TTSPipeline(
+        model=app.state.model,
+        ws_connection_manager=app.state.ws_connection_manager,
+        request_queue=request_queue,
+        vts_pog_url=vts_pog_url,
+        mode=tts_mode,
+    )
+    app.state.request_queue = TTSRequestQueue(pipeline=pipeline, request_queue=request_queue)
     yield
     # Shutdown
     queue = app.state.request_queue

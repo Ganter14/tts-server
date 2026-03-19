@@ -1,3 +1,4 @@
+from enum import Enum
 from pydantic import BaseModel
 from typing import Literal, Optional
 
@@ -36,3 +37,23 @@ class WSMessageEnd(WSMessageBase):
 class VTSPogRequest(BaseModel):
     user: str
     data: str
+
+class PipelineItemType(str, Enum):
+    STREAM_START = "stream_start"
+    STREAM_CHUNK = "stream_chunk"
+    STREAM_END = "stream_end"
+    FILE = "file"
+
+class PipelineItem(BaseModel):
+    """Элемент, передаваемый между генератором и отправителем."""
+    request_id: str
+    client_id: str
+    chatter_name: str
+    item_type: PipelineItemType
+    # Для streaming
+    chunk_index: int | None = None
+    chunk_data: str | None = None  # base64
+    is_final: bool = False
+    sr: str | None = None
+    # Для file
+    base64_wav: str | None = None
