@@ -25,7 +25,7 @@ class QwenTTS:
   def _warmup(self):
     audio_prompt = list(self.audio_prompts.values())[0]
     self.model.generate_voice_clone(
-      text=" ",
+      text="warmup",
       language="auto",
       voice_clone_prompt=audio_prompt,
     )
