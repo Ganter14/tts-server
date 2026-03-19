@@ -40,9 +40,11 @@ class WsConnectionManager:
         except Exception as e:
             logger.exception("Error in websocket listener for client %s: %s", client_id, e)
         finally:
-            self._remove_connection(client_id, websocket)
+            self._remove_connection(client_id, websocket, from_listener=True)
 
-    def _remove_connection(self, client_id: str, websocket: WebSocket) -> None:
+    def _remove_connection(
+        self, client_id: str, websocket: WebSocket, *, from_listener: bool = False
+    ) -> None:
         """Удаляет конкретное соединение. При отключении последнего соединения client_id удаляется."""
         wid = id(websocket)
         self._connection_to_client.pop(wid, None)
@@ -52,7 +54,8 @@ class WsConnectionManager:
             if not connections:
                 del self._connections[client_id]
         task = self._workers.pop(wid, None)
-        if task is not None and not task.done():
+        # Не отменяем задачу, если вызов из самой задачи (finally при отключении)
+        if task is not None and not task.done() and not from_listener:
             task.cancel()
 
     def get_clients(self, client_id: str) -> List[WebSocket]:
