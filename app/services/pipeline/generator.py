@@ -88,5 +88,5 @@ class PipelineGenerator:
             client_id=request.client_id,
             chatter_name=request.chatter_name,
             item_type=PipelineItemType.FILE,
-            base64_wav=base64_data,
+            base64_wav=f"data:audio/wav;base64,{base64_data}",
         )
