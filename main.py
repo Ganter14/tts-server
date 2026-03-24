@@ -1,10 +1,10 @@
 import asyncio
 import os
 from contextlib import asynccontextmanager
-
 import uvicorn
 from dotenv import load_dotenv
 from fastapi import FastAPI
+import logging
 
 from app.api.routes import router
 from app.core.models import TTSRequestQueueItem
@@ -15,6 +15,11 @@ from app.services.tts_queue import TTSRequestQueue
 
 load_dotenv()
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s.%(msecs)03d %(levelname)s [%(name)s] %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -23,7 +28,7 @@ async def lifespan(app: FastAPI):
     app.state.model = QwenTTS()
     app.state.ws_connection_manager = WsConnectionManager()
     request_queue: asyncio.Queue[TTSRequestQueueItem] = asyncio.Queue()
-    vts_pog_url = os.getenv("vts_pog_url")
+    file_endpoint_url = os.getenv("file_endpoint_url")
     tts_mode = os.getenv("tts_mode", "streaming")
     if tts_mode not in ("streaming", "file"):
         tts_mode = "streaming"
@@ -31,7 +36,7 @@ async def lifespan(app: FastAPI):
         model=app.state.model,
         ws_connection_manager=app.state.ws_connection_manager,
         request_queue=request_queue,
-        vts_pog_url=vts_pog_url,
+        file_endpoint_url=file_endpoint_url,
         mode=tts_mode,
     )
     app.state.request_queue = TTSRequestQueue(pipeline=pipeline, request_queue=request_queue)

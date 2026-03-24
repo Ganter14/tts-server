@@ -17,13 +17,13 @@ class TTSPipeline:
         model: QwenTTS,
         ws_connection_manager: WsConnectionManager,
         request_queue: asyncio.Queue[TTSRequestQueueItem],
-        vts_pog_url: str | None,
+        file_endpoint_url: str | None,
         mode: Literal["streaming", "file"],
     ):
         self._request_queue = request_queue
         self._pipeline_queue: asyncio.Queue[PipelineItem | None] = asyncio.Queue(maxsize=10)
         self._generator = PipelineGenerator(model, mode)
-        self._sender = PipelineSender(ws_connection_manager, vts_pog_url, mode)
+        self._sender = PipelineSender(ws_connection_manager, file_endpoint_url)
         self._mode = mode
         self._generator_task: asyncio.Task | None = None
         self._sender_task: asyncio.Task | None = None
@@ -32,8 +32,10 @@ class TTSPipeline:
     def start_if_needed(self) -> None:
         """Запускает генератор и отправитель, если ещё не запущены."""
         if self._generator_task is None or self._generator_task.done():
+            logger.info("tts | phase=pipeline_tasks_start | task=generator | mode=%s", self._mode)
             self._generator_task = asyncio.create_task(self._run_generator())
         if self._sender_task is None or self._sender_task.done():
+            logger.info("tts | phase=pipeline_tasks_start | task=sender | mode=%s", self._mode)
             self._sender_task = asyncio.create_task(self._run_sender())
 
     async def _run_generator(self) -> None:
@@ -47,6 +49,7 @@ class TTSPipeline:
                 async for item in self._generator.generate(request):
                     if self._shutdown.is_set():
                         return
+
                     await self._pipeline_queue.put(item)
         except asyncio.CancelledError:
             pass
@@ -67,8 +70,6 @@ class TTSPipeline:
             pass
         except Exception as e:
             logger.exception("Sender task failed: %s", e)
-        finally:
-            await self._sender.shutdown()
 
     async def shutdown(self, timeout: float = 30.0) -> None:
         """Останавливает конвейер."""

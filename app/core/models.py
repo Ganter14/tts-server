@@ -1,12 +1,24 @@
 from enum import Enum
-from pydantic import BaseModel
-from typing import Literal, Optional
+from typing import Literal
+import numpy as np
+from pydantic import BaseModel, field_validator
+
+from app.core.text_normalize import normalize_tts_text
+
 
 class TTSRequestBase(BaseModel):
     text: str
     audio_prompt: str = "pudge"
     chatter_name: str
     client_id: str  # twitch nickname
+
+    @field_validator("text", mode="before")
+    @classmethod
+    def _normalize_text(cls, v: object) -> object:
+        if isinstance(v, str):
+            return normalize_tts_text(v)
+        return v
+
 
 class TTSRequest(TTSRequestBase):
     pass
@@ -35,8 +47,7 @@ class WSMessageEnd(WSMessageBase):
     type: ws_message_types = "tts_end"
 
 class VTSPogRequest(BaseModel):
-    user: str
-    data: str
+    text: str # file path
 
 class PipelineItemType(str, Enum):
     STREAM_START = "stream_start"
@@ -49,6 +60,7 @@ class PipelineItem(BaseModel):
     request_id: str
     client_id: str
     chatter_name: str
+    text: str
     item_type: PipelineItemType
     # Для streaming
     chunk_index: int | None = None
@@ -57,3 +69,13 @@ class PipelineItem(BaseModel):
     sr: str | None = None
     # Для file
     base64_wav: str | None = None
+
+
+class ChunkTiming(BaseModel):
+    chunk_index: int
+    is_final: bool
+
+class GeneratorChunk(BaseModel):
+    audio_chunk: np.ndarray
+    sr: int
+    timing: ChunkTiming

@@ -1,13 +1,9 @@
 import logging
-from typing import Literal
-
 import httpx
-from fastapi import HTTPException
 
 from app.core.models import (
     PipelineItem,
     PipelineItemType,
-    VTSPogRequest,
     WSMessageChunk,
     WSMessageEnd,
     WSMessageStart,
@@ -21,12 +17,10 @@ class PipelineSender:
     def __init__(
         self,
         ws_connection_manager: WsConnectionManager,
-        vts_pog_url: str | None,
-        mode: Literal["streaming", "file"],
+        file_endpoint_url: str | None,
     ):
         self._ws = ws_connection_manager
-        self._vts_pog_url = (vts_pog_url or "").rstrip("/")
-        self._mode = mode
+        self._file_endpoint_url = (file_endpoint_url or "").rstrip("/")
 
     async def send(self, item: PipelineItem) -> None:
         """Отправляет элемент в зависимости от типа."""
@@ -37,7 +31,7 @@ class PipelineSender:
             if item.is_final:
                 await self._send_ws_end(item)
         elif item.item_type == PipelineItemType.FILE:
-            await self._send_to_vts_pog(item)
+            await self._send_to_file_endpoint(item)
 
     async def _send_ws_start(self, item: PipelineItem) -> None:
         await self._ws.send_json_to_client(
@@ -61,25 +55,25 @@ class PipelineSender:
             WSMessageEnd(request_id=item.request_id).model_dump(mode="json"),
         )
 
-    async def _send_to_vts_pog(self, item: PipelineItem) -> None:
-        if not self._vts_pog_url:
-            raise HTTPException(status_code=500, detail="vts_pog_url is required for file mode")
-        payload = VTSPogRequest(user=item.chatter_name, data=item.base64_wav or "").model_dump(
-            mode="json"
-        )
+    async def _send_to_file_endpoint(self, item: PipelineItem) -> None:
+        if not self._file_endpoint_url:
+            logger.exception("tts | phase=emit_file_start | request_id=%s | user=%s | vts_pog_url is not set", item.request_id, item.chatter_name)
+            return
+        post_url = f"{self._file_endpoint_url}"
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                f"{self._vts_pog_url}/pog64",
-                json=payload,
+                post_url,
                 timeout=10,
-                headers={"Content-Type": "application/json"},
+                headers={
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "data": item.base64_wav,
+                    "sr": item.sr,
+                    "chatter_name": item.chatter_name,
+                    "request_id": item.request_id,
+                    "text": item.text,
+                }
             )
         if response.status_code != 200 or response.text.strip() != "1":
-            raise HTTPException(
-                status_code=500,
-                detail=f"Ошибка при отправке аудио в VTS Pog: {response.status_code}",
-            )
-
-    async def shutdown(self) -> None:
-        """Ничего не делает — клиент создаётся на каждый запрос."""
-        pass
+            logger.exception("tts | phase=emit_file_error | request_id=%s | user=%s | status=%s | response=%s", item.request_id, item.chatter_name, response.status_code, response.text)

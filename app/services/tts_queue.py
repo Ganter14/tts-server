@@ -1,5 +1,6 @@
 import asyncio
 import logging
+
 from app.core.models import TTSRequest, TTSRequestQueueItem
 from app.services.pipeline.pipeline import TTSPipeline
 
@@ -17,10 +18,20 @@ class TTSRequestQueue:
 
     async def add_request(self, request_id: str, request: TTSRequest) -> None:
         """Добавляет запрос в очередь входа конвейера."""
-        item = TTSRequestQueueItem(request_id=request_id, **request.model_dump())
+        item = TTSRequestQueueItem(
+            request_id=request_id,
+            **request.model_dump(),
+        )
         await self._request_queue.put(item)
-        logger.info("Запрос добавлен в очередь: %s", request_id)
         self._pipeline.start_if_needed()
+        logger.info(
+            "tts | phase=enqueue | request_id=%s | text=%r | speaker=%s | client_id=%s | chatter=%s",
+            request_id,
+            item.text,
+            item.audio_prompt,
+            item.client_id,
+            item.chatter_name,
+        )
 
     async def shutdown(self, timeout: float = 30.0) -> None:
         """Останавливает конвейер."""
