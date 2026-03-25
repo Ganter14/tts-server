@@ -1,7 +1,8 @@
+from dataclasses import dataclass
 from enum import Enum
-from typing import Literal
+from typing import Annotated, Literal, Union
 import numpy as np
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 from app.core.text_normalize import normalize_tts_text
 
@@ -28,23 +29,32 @@ class TTSRequestQueueItem(TTSRequestBase):
 
 
 
-ws_message_types = Literal["tts_start", "audio_chunk", "tts_end"]
+class WSMessageType(str, Enum):
+    START = "tts_start"
+    CHUNK = "audio_chunk"
+    END = "tts_end"
+
 class WSMessageBase(BaseModel):
-    type: ws_message_types
     request_id: str
 
 class WSMessageStart(WSMessageBase):
-    type: ws_message_types = "tts_start"
+    type: Literal[WSMessageType.START] = WSMessageType.START
 
 class WSMessageChunk(WSMessageBase):
-    type: ws_message_types = "audio_chunk"
+    type: Literal[WSMessageType.CHUNK] = WSMessageType.CHUNK
     chunk_index: int
     chunk_data: str
     is_final: bool
     sr: str
 
 class WSMessageEnd(WSMessageBase):
-    type: ws_message_types = "tts_end"
+    type: Literal[WSMessageType.END] = WSMessageType.END
+
+
+WSMessage = Annotated[
+    Union[WSMessageStart, WSMessageChunk, WSMessageEnd],
+    Field(discriminator="type"),
+]
 
 class VTSPogRequest(BaseModel):
     text: str # file path
@@ -71,11 +81,13 @@ class PipelineItem(BaseModel):
     base64_wav: str | None = None
 
 
-class ChunkTiming(BaseModel):
+@dataclass
+class ChunkTiming:
     chunk_index: int
     is_final: bool
 
-class GeneratorChunk(BaseModel):
+@dataclass
+class GeneratorChunk:
     audio_chunk: np.ndarray
     sr: int
     timing: ChunkTiming

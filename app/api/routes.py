@@ -2,7 +2,7 @@ import logging
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, status
 
-from app.core.models import TTSRequest
+from app.core.models import TTSRequest, WSMessage
 from app.core.qwen_tts import QwenTTS
 from app.core.ws_connection_manager import WsConnectionManager
 from app.services.tts_queue import TTSRequestQueue
@@ -64,3 +64,12 @@ async def websocket_endpoint(
         await websocket.close(code=4000, reason="client_id is required")
         return
     await ws_connection_manager.add_client(websocket, client_id)
+
+@router.get(
+    "/docs/ws-messages",
+    response_model=WSMessage,
+    summary="WebSocket message shapes (docs only)",
+    tags=["WebSocket"],
+)
+async def websocket_message_schemas():
+    raise HTTPException(501, "Not implemented — schema only")
