@@ -7,6 +7,7 @@ from app.core.models import (
     WSMessageChunk,
     WSMessageEnd,
     WSMessageStart,
+    WSMessageType,
 )
 from app.core.ws_connection_manager import WsConnectionManager
 
@@ -36,11 +37,12 @@ class PipelineSender:
     async def _send_ws_start(self, item: PipelineItem) -> None:
         await self._ws.send_json_to_client(
             item.client_id,
-            WSMessageStart(request_id=item.request_id).model_dump(mode="json"),
+            WSMessageStart(request_id=item.request_id, type=WSMessageType.START).model_dump(mode="json"),
         )
 
     async def _send_ws_chunk(self, item: PipelineItem) -> None:
         msg = WSMessageChunk(
+            type=WSMessageType.CHUNK,
             request_id=item.request_id,
             chunk_index=item.chunk_index or 0,
             chunk_data=item.chunk_data or "",
@@ -52,7 +54,7 @@ class PipelineSender:
     async def _send_ws_end(self, item: PipelineItem) -> None:
         await self._ws.send_json_to_client(
             item.client_id,
-            WSMessageEnd(request_id=item.request_id).model_dump(mode="json"),
+            WSMessageEnd(request_id=item.request_id, type=WSMessageType.END).model_dump(mode="json"),
         )
 
     async def _send_to_file_endpoint(self, item: PipelineItem) -> None:

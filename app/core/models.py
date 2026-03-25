@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from enum import Enum
+from enum import Enum, StrEnum
 from typing import Annotated, Literal, Union
 import numpy as np
 from pydantic import BaseModel, Field, field_validator
@@ -29,26 +29,27 @@ class TTSRequestQueueItem(TTSRequestBase):
 
 
 
-class WSMessageType(str, Enum):
+class WSMessageType(StrEnum):
     START = "tts_start"
     CHUNK = "audio_chunk"
     END = "tts_end"
 
 class WSMessageBase(BaseModel):
     request_id: str
+    doc_type: WSMessageType | None = None
 
 class WSMessageStart(WSMessageBase):
-    type: Literal[WSMessageType.START] = WSMessageType.START
+    type: Literal[WSMessageType.START]
 
 class WSMessageChunk(WSMessageBase):
-    type: Literal[WSMessageType.CHUNK] = WSMessageType.CHUNK
+    type: Literal[WSMessageType.CHUNK]
     chunk_index: int
     chunk_data: str
     is_final: bool
     sr: str
 
 class WSMessageEnd(WSMessageBase):
-    type: Literal[WSMessageType.END] = WSMessageType.END
+    type: Literal[WSMessageType.END]
 
 
 WSMessage = Annotated[
